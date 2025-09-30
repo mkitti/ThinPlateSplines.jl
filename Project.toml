@@ -17,7 +17,7 @@ ThinPlateSplinesGeometryBasicsExt = "GeometryBasics"
 [compat]
 julia = "1, 1.6, 1.7, 1.8"
 Tullio = "0.3"
-GeometryBasics = "0.4"
+GeometryBasics = "0.4, 0.5"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
