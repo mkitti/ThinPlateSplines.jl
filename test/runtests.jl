@@ -112,3 +112,40 @@ end
       @test isapprox(tps_deform(pts, tps), tps_deform(pts, ref_tps); atol=1e-8)
   end
 end
+
+# Guards the in-place tps_solve! / TPSWorkspace path: it must reproduce the
+# allocating tps_solve's c, d, and deform output — and reusing the SAME workspace
+# for a second, different solve must leave no stale state (every buffer is fully
+# overwritten each call).
+@testset "tps_solve! matches tps_solve and reuses workspace cleanly" begin
+  for (K, D) in ((40, 3), (60, 2))
+      x  = Float64[sin(0.7i + 1.3d) + 0.11i - 0.05d for i in 1:K, d in 1:D]
+      y1 = Float64[cos(0.5i - 0.9d) + 0.07i        for i in 1:K, d in 1:D]
+      y2 = Float64[sin(0.3i + 0.4d) - 0.02i        for i in 1:K, d in 1:D]
+      pts = x[1:5, :]
+
+      ws = TPSWorkspace{Float64}(K, D)
+
+      ref1 = tps_solve(x, y1, 1.0)
+      got1 = tps_solve!(ws, x, y1, 1.0)
+      @test isapprox(got1.c, ref1.c; atol=1e-9)
+      @test isapprox(got1.d, ref1.d; atol=1e-9)
+      @test isempty(got1.Φ)                                   # Φ intentionally dropped
+      @test isapprox(tps_deform(pts, got1), tps_deform(pts, ref1); atol=1e-9)
+
+      # Reuse the SAME workspace with different control points.
+      ref2 = tps_solve(x, y2, 1.0)
+      got2 = tps_solve!(ws, x, y2, 1.0)
+      @test isapprox(got2.c, ref2.c; atol=1e-9)
+      @test isapprox(got2.d, ref2.d; atol=1e-9)
+      @test isapprox(tps_deform(pts, got2), tps_deform(pts, ref2); atol=1e-9)
+
+      # compute_affine=false still gives identical c, empty d.
+      no_aff = tps_solve!(ws, x, y1, 1.0; compute_affine=false)
+      @test isapprox(no_aff.c, ref1.c; atol=1e-9)
+      @test isempty(no_aff.d)
+
+      # Wrong-size workspace is rejected.
+      @test_throws DimensionMismatch tps_solve!(TPSWorkspace{Float64}(K+1, D), x, y1, 1.0)
+  end
+end
