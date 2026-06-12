@@ -78,17 +78,20 @@ function tps_solve(x,y,λ; compute_affine=true)
 	# compute TPS kernel
 	Φ = tps_kernel(x)
 
-	# full QR decomposition
-	Q,r = qr(X)
-	q1 = Q[:,1:(D+1)]
-	q2 = Q[:,(D+2):end]
-
-	# warping coefficients. Solve (λI + q2'Φq2) z = q2'Y rather than forming the
-	# explicit inverse — faster and more numerically stable.
-	c = q2*((UniformScaling(λ) + q2'*Φ*q2) \ (q2'*Y))
-
-	# affine component
-	d = compute_affine ?  r\(q1'*(Y - Φ*c)) : eltype(c)[;;]
+	# Solve the regularized TPS saddle-point (KKT) system directly:
+	#     [ Φ+λI   X ] [c]   [Y]
+	#     [ X'     0 ] [d] = [0]
+	# This is mathematically identical to the QR null-space method (projecting
+	# the top block onto null(X') with orthonormal q2 gives
+	# q2'(Φ+λI)q2 = λI + q2'Φq2) but needs a single symmetric-indefinite
+	# factorization instead of a full QR plus the O(K³) q2'Φq2 double matmul and
+	# a separate Φ*c affine backsolve.
+	A = [Φ + λ*I                       X
+	     X'        zeros(eltype(X), D+1, D+1)]
+	rhs = vcat(Y, zeros(eltype(Y), D+1, size(Y, 2)))
+	sol = bunchkaufman!(Symmetric(A)) \ rhs
+	c = sol[1:K, :]
+	d = compute_affine ? sol[(K+1):end, :] : eltype(c)[;;]
 	return ThinPlateSpline(λ,x,Y,Φ,d,c)
 end
 

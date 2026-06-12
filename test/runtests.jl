@@ -1,6 +1,6 @@
 using Test
 using ThinPlateSplines
-using LinearAlgebra: diagind
+using LinearAlgebra
 
 @testset "tps generation" begin
     x1 = [0.0 1.0 
@@ -13,7 +13,7 @@ using LinearAlgebra: diagind
     @test tps.Y == [ 1.0  0.0  1.0
     1.0  1.1  0.0
     1.0  1.2  1.5]
-    @test tps.c == zeros((3,3))
+    @test isapprox(tps.c, zeros((3,3)); atol=1e-10)  # ~0 to machine precision (KKT solve gives ~1e-16, QR gave exact 0)
     @test tps.d ≈ [  1.0          -0.1  -0.5
     0   1.2   0.5
     0   0.1   1.5]
@@ -43,7 +43,7 @@ tps = tps_solve(x1, x2, 1.0)
 end
 
 @testset "tps_energy" begin
-    @test tps_energy(tps) ≈ 0
+    @test isapprox(tps_energy(tps), 0; atol=1e-10)  # ~0 to machine precision (energy ∝ c, which is ~1e-16 here)
 end
 
 @testset "Three dimensions" begin
@@ -82,5 +82,33 @@ end
       @test Φ ≈ naive_kernel(x)
       @test Φ == Φ'                            # symmetric
       @test all(iszero, @view Φ[diagind(Φ)])   # zero diagonal (r == 0)
+  end
+end
+
+# Guards the augmented (KKT) solve: it must reproduce the classic QR-nullspace
+# TPS coefficients (and hence the same deformation) to fp tolerance.
+@testset "tps_solve matches QR-nullspace reference" begin
+  function ref_solve(x, y, λ)
+      K, D = size(x)
+      X = hcat(ones(K, 1), x); Y = hcat(ones(K, 1), y)
+      Φ = ThinPlateSplines.tps_kernel(x)
+      Q, r = qr(X)
+      Qf = Q * Matrix{Float64}(I, K, K)
+      q1 = Qf[:, 1:(D+1)]; q2 = Qf[:, (D+2):end]
+      c = q2 * ((UniformScaling(λ) + q2'*Φ*q2) \ (q2'*Y))
+      d = r \ (q1' * (Y - Φ*c))
+      (c, d)
+  end
+  for (K, D) in ((40, 3), (60, 2))
+      x = Float64[sin(0.7i + 1.3d) + 0.11i - 0.05d for i in 1:K, d in 1:D]
+      y = Float64[cos(0.5i - 0.9d) + 0.07i        for i in 1:K, d in 1:D]
+      tps = tps_solve(x, y, 1.0)
+      rc, rd = ref_solve(x, y, 1.0)
+      @test isapprox(tps.c, rc; atol=1e-8)
+      @test isapprox(tps.d, rd; atol=1e-8)
+      ref_tps = ThinPlateSpline(1.0, x, hcat(ones(K, 1), y),
+                                ThinPlateSplines.tps_kernel(x), rd, rc)
+      pts = x[1:5, :]
+      @test isapprox(tps_deform(pts, tps), tps_deform(pts, ref_tps); atol=1e-8)
   end
 end
