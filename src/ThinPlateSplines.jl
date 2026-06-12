@@ -39,7 +39,15 @@ tps_basis(r::T) where {T}  = ifelse(r < eps(r), zero(T), r*r*log(r))
 my_norm(a) = sqrt(sum(a.^2))
 
 # x: matrix of size KxD
-tps_kernel(x) = [tps_basis(my_norm(x[i,:] - x[j,:])) for i in axes(x)[1], j=axes(x)[1]]
+# Allocation-free kernel: the naive comprehension `x[i,:] - x[j,:]` allocates two
+# row slices + a diff + `.^2` for each of K² entries (564 MB / ~120 ms at K=1312).
+# Fuse the pairwise squared-distance into a single @tullio loop (as tps_deform
+# already does), then map tps_basis over it.
+function tps_kernel(x)
+    @tullio sumsqr[i,j] := abs2(x[i,m] - x[j,m])
+    @tullio K[i,j] := tps_basis(sqrt(sumsqr[i,j]))
+    return K
+end
 
 """
 	tps_solve(x,y,λ,compute_affine=true)
@@ -75,8 +83,9 @@ function tps_solve(x,y,λ; compute_affine=true)
 	q1 = Q[:,1:(D+1)]
 	q2 = Q[:,(D+2):end]
 
-	# warping coefficients
-	c = q2*inv(UniformScaling(λ) + q2'*Φ*q2)*q2'*Y
+	# warping coefficients. Solve (λI + q2'Φq2) z = q2'Y rather than forming the
+	# explicit inverse — faster and more numerically stable.
+	c = q2*((UniformScaling(λ) + q2'*Φ*q2) \ (q2'*Y))
 
 	# affine component
 	d = compute_affine ?  r\(q1'*(Y - Φ*c)) : eltype(c)[;;]
