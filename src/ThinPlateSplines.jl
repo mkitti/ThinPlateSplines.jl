@@ -107,7 +107,7 @@ Yet it can be used to transform other mathematical structures rather than points
 function tps_deform(x2::AbstractMatrix{T}, tps::ThinPlateSpline) where {T}
     x1,d,c = tps.x1,tps.d,tps.c
 	d==[] && throw(ArgumentError("Affine component not available; run tps_solve with compute_affine=true."))
-	D = size(x2, 2)
+	D = size(tps.Y, 2) - 1
     all_homo_z = hcat(ones(T, size(x2,1)), x2)
     # calculate sum of squares. Note that the summation is done outside the abs2
 	# it may be useful to join the terms below, but this seems a little harder than first thought
