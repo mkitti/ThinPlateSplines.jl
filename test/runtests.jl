@@ -41,6 +41,15 @@ tps = tps_solve(x1, x2, 1.0)
     2.5   3.5]
 end
 
+@testset "Different input and output dimensions" begin
+  start_pts = [0.0 0.0; 1.0 0.0; 0.0 1.0]
+  end_pts = [0.0 0.0 1.0; 1.0 0.0 2.0; 0.0 1.0 3.0]
+  tps = tps_solve(start_pts, end_pts, 1.0)
+  deformed = tps_deform([0.5 0.25], tps)
+  @test size(deformed) == (1, 3)
+  @test deformed ≈ [0.5 0.25 2.0]
+end
+
 @testset "tps_energy" begin
     @test tps_energy(tps) ≈ 0
 end
