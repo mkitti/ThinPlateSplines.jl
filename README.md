@@ -83,3 +83,23 @@ tps_deform(line,tps_solve(x1,x2,1.0))
 ```
 
 Gives a more complicated curve, with `y(t) = 1.472 + 0.603 t - 0.009 t² + ...`. Note that this general idea can be extended to planes in 3D (or, indeed, higher-order dimensions) or even deformation of general geometric objects like spheres, etc.
+
+#### GeometryBasics.jl points
+
+If [GeometryBasics.jl](https://github.com/JuliaGeometry/GeometryBasics.jl) is loaded alongside ThinPlateSplines.jl (Julia 1.9 or later), `tps_solve` and `tps_deform` also accept an `AbstractVector` of `GeometryBasics.Point`s instead of a matrix. This is implemented as a [package extension](https://pkgdocs.julialang.org/v1/creating-packages/#Conditional-loading-of-code-in-packages-(Extensions)), so GeometryBasics.jl is not a dependency unless you use it.
+
+```julia
+using ThinPlateSplines
+using GeometryBasics: Point
+
+x1 = [Point(0.0, 1.0), Point(1.0, 0.0), Point(1.0, 1.0)]
+x2 = [Point(0.0, 1.0), Point(1.1, 0.0), Point(1.2, 1.5)]
+
+tps = tps_solve(x1, x2, 1.0)            # control points as vectors of Points
+
+x = [Point(1.0, 0.0), Point(2.0, 2.0)]
+tps_deform(x, tps)                      # returns a Vector of Points
+tps_deform(x1, x, x2, 1.0)              # same, solving and deforming in one call
+```
+
+Points are deformed with the same results as the equivalent matrix with one point per row. The result of `tps_deform` is a `Vector{Point{N,T}}`, where `N` is the output dimension of the spline, which may differ from the input dimension. The `compute_affine` keyword is supported by `tps_solve`.

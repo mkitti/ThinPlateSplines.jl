@@ -20,4 +20,8 @@ Tullio = "0.3"
 GeometryBasics = "0.4, 0.5"
 
 [extras]
+GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["GeometryBasics", "Test"]

@@ -75,3 +75,81 @@ end
   @test deformed ≈ end_pts
   @test tps_deform([0.5 0.5 0.5 0.5], tps) ≈ [1.2 1.2 0.5 0.5]
 end
+
+@testset "GeometryBasics extension" begin
+  using GeometryBasics: Point, Point2, Point3
+
+  # The extension is loaded because GeometryBasics is a test dependency
+  ext = Base.get_extension(ThinPlateSplines, :ThinPlateSplinesGeometryBasicsExt)
+  @test ext !== nothing
+
+  p1 = [Point(0.0, 1.0), Point(1.0, 0.0), Point(1.0, 1.0)]
+  p2 = [Point(0.0, 1.0), Point(1.1, 0.0), Point(1.2, 1.5)]
+
+  @testset "tps_solve matches the matrix method" begin
+    tps_pts = tps_solve(p1, p2, 1.0)
+    @test tps_pts isa ThinPlateSpline
+    @test tps_pts.x1 == x1
+    @test tps_pts.Y == tps.Y
+    @test tps_pts.d ≈ tps.d
+    @test tps_pts.c ≈ tps.c
+    @test tps_pts.Φ ≈ tps.Φ
+    @test tps_energy(tps_pts) ≈ 0
+  end
+
+  @testset "compute_affine=false" begin
+    tps_noaff = tps_solve(p1, p2, 1.0; compute_affine=false)
+    @test isempty(tps_noaff.d)
+  end
+
+  @testset "tps_deform returns points" begin
+    pts = [Point(1.0, 0.0), Point(2.0, 2.0)]
+    y = tps_deform(pts, tps)
+    @test y isa Vector{Point2{Float64}}
+    @test length(y) == 2
+    @test stack(y; dims=1) ≈ [1.1 0.0; 2.5 3.5]
+    @test stack(y; dims=1) ≈ tps_deform([1.0 0.0; 2.0 2.0], tps)
+  end
+
+  @testset "four-argument tps_deform" begin
+    pts = [Point(1.0, 0.0), Point(2.0, 2.0)]
+    y = tps_deform(p1, pts, p2, 1.0)
+    @test y isa Vector{Point2{Float64}}
+    @test stack(y; dims=1) ≈ [1.1 0.0; 2.5 3.5]
+    # control points deform onto their targets for an affine (exact) fit
+    @test stack(tps_deform(p1, p1, p2, 1.0); dims=1) ≈ stack(p2; dims=1)
+  end
+
+  @testset "integer and Float32 points" begin
+    y = tps_deform([Point(1, 0)], tps)
+    @test y isa Vector{Point2{Float64}}
+    @test stack(y; dims=1) ≈ [1.1 0.0]
+    y32 = tps_deform([Point(1f0, 0f0)], tps)
+    @test stack(y32; dims=1) ≈ [1.1 0.0]
+  end
+
+  @testset "empty input" begin
+    y = tps_deform(Point2{Float64}[], tps)
+    @test y isa Vector{Point2{Float64}}
+    @test isempty(y)
+  end
+
+  @testset "different input and output dimensions" begin
+    s = [Point(0.0, 0.0), Point(1.0, 0.0), Point(0.0, 1.0)]
+    e = [Point(0.0, 0.0, 1.0), Point(1.0, 0.0, 2.0), Point(0.0, 1.0, 3.0)]
+    tps23 = tps_solve(s, e, 1.0)
+    y = tps_deform([Point(0.5, 0.25)], tps23)
+    @test y isa Vector{Point3{Float64}}
+    @test only(y) ≈ Point(0.5, 0.25, 2.0)
+  end
+
+  @testset "three dimensions" begin
+    s = [Point(0, 0, 0), Point(0, 0, 1), Point(0, 1, 0), Point(1, 0, 0)]
+    e = [Point(-0.7, -0.7, 0.0), Point(0.0, 0.0, 1.0), Point(0.0, 1.0, 0.0), Point(1.0, 0.0, 0.0)]
+    tps3 = tps_solve(s, e, 1.0)
+    y = tps_deform(s, tps3)
+    @test y isa Vector{Point3{Float64}}
+    @test y ≈ e
+    @test only(tps_deform([Point(0.5, 0.5, 0.5)], tps3)) ≈ Point(0.85, 0.85, 0.5)
+  end
+end
